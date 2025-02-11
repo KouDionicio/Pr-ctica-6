@@ -4,7 +4,7 @@ import moment from "moment-timezone";
 
 const SesionSchema = new Schema({
     sessionID: {
-        default: uuidv4, // Usar uuidv4 para generar el ID único
+        default: uuidv4, 
         unique: true,
         type: String
     },
@@ -18,12 +18,12 @@ const SesionSchema = new Schema({
     },
     createdAt: {
         type: Date,
-        default: () => moment().tz("America/Mexico_City").toDate(), // Usar moment para la fecha con zona horaria
+        default: () => moment().tz("America/Mexico_City").toDate(), 
         required: true
     },
     lastAcces: {
         type: Date,
-        default: () => moment().tz("America/Mexico_City").toDate(), // Lo mismo para el último acceso
+        default: () => moment().tz("America/Mexico_City").toDate(), 
     },
     status: {
         type: String,

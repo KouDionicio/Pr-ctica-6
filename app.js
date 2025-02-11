@@ -6,6 +6,8 @@ import { v4 as uuidv4 } from 'uuid';
 import os from "os"
 import cors from "cors"
 import "./database.js"
+import Sesion from './models/Sesiones.js'; 
+
 const app = express();
 const PORT = 3500;
 
@@ -62,12 +64,11 @@ const SESSION_TIMEOUT = 2 * 60 * 1000; // 2 minutos en milisegundos
 
 // Función para eliminar sesiones inactivas
 const cleanupInactiveSessions = () => {
-    const now = moment.tz("America/Mexico_City"); // Usamos un objeto moment válido
+    const now = moment.tz("America/Mexico_City"); 
     for (const sessionId in sessionStore) {
         const session = sessionStore[sessionId];
-        const lastAccessed = moment(session.lastAccessed, "DD-MM-YYYY HH:mm:ss"); // Usamos el formato personalizado
-
-        // Verificamos si lastAccessed es válido
+        const lastAccessed = moment(session.lastAccessed, "DD-MM-YYYY HH:mm:ss"); 
+       
         if (!lastAccessed.isValid()) {
             console.error(`Fecha no válida para la sesión ${sessionId}`);
             continue;
@@ -99,147 +100,371 @@ app.post("/login", (req, res) => {
     const sessionId = uuidv4();
     const now = moment.tz('America/Mexico_City').format('DD-MM-YYYY HH:mm:ss'); // Formato de hora personalizado
 
-    // Guardar los datos de la sesión en sessionStore
-    sessionStore[sessionId] = {
-        sessionId,
+    // Obtener datos de IP y MAC del servidor
+    const serverIp = '10.10.62.7'; 
+    const serverMac = 'a0:e7:0b:f9:37:56'; 
+
+    // Crear objeto para guardar en MongoDB
+    const sessionData = {
+        sessionID: sessionId,
         email,
         nickname,
-        macAddress,
-        ip: getServerNetworkInfo(),
-        ipCliente: getClienteIP(req),
-        createdAt: now, // Usamos createdAt en lugar de createAt
-        lastAccessed: now,
-        isActive: true
+        createdAt: moment().tz("America/Mexico_City").toDate(), 
+        lastAcces: moment().tz("America/Mexico_City").toDate(), 
+        status: 'Activa', 
+        clientData: {
+            ip: getClienteIP(req),  
+            macAddress
+        },
+        serverData: {
+            ip: serverIp,  // La IP del servidor
+            macAddress: serverMac // La MAC del servidor
+        },
+        inactivityTime: {
+            hours: 0,
+            minutes: 0,
+            seconds: 0
+        }
     };
 
-    res.status(200).json({
-        message: "Se ha logeado de manera exitosa !!!",
-        sessionId
-    });
+    // Guardar la sesión en la base de datos
+    Sesion.create(sessionData)
+        .then((session) => {
+            res.status(200).json({
+                message: "Se ha logeado de manera exitosa !!!",
+                sessionId
+            });
+            
+        })
+        .catch((error) => {
+            console.error("Error al guardar la sesión:", error);
+            res.status(500).json({ message: "Hubo un error al guardar la sesión" });
+        });
 });
+
 
 // Logout Endpoint
 app.post("/logout", (req, res) => {
     const { sessionId } = req.body;
 
-    if (!sessionId || !sessionStore[sessionId]) {
-        return res.status(404).json({ message: "No se encuentra una sesión activa" });
+    if (!sessionId) {
+        return res.status(400).json({ message: "sessionId es obligatorio." });
     }
 
-    // Eliminar la sesión de sessionStore
-    delete sessionStore[sessionId];  // Elimina la sesión del almacenamiento
+    
+    Sesion.findOne({ sessionID: sessionId })
+        .then(session => {
+            if (!session) {
+                return res.status(404).json({ message: "No existe una sesión activa con ese sessionId" });
+            }
 
-    res.status(200).json({ message: "Logout successful" });
+            
+            session.status = "Finalizada por el Usuario";
+
+            // Se guarda la sesión con el nuevo estado
+            session.save()
+                .then(() => {
+                    res.status(200).json({ message: "Sesión finalizada correctamente." });
+                })
+                .catch(error => {
+                    console.error("Error al guardar la sesión:", error);
+                    res.status(500).json({ message: "Hubo un error al actualizar el estado de la sesión" });
+                });
+        })
+        .catch(error => {
+            console.error("Error al buscar la sesión:", error);
+            res.status(500).json({ message: "Hubo un error al buscar la sesión en la base de datos" });
+        });
 });
-// Actualización de la sesión
+
+
+
 app.put("/update", (req, res) => {
     const { sessionId, email, nickname } = req.body;
 
-    if (!sessionId || !sessionStore[sessionId]) {
-        return res.status(404).json({ message: "No existe una sesión activa" });
+    if (!sessionId) {
+        return res.status(404).json({ message: "No se proporcionó sessionId" });
     }
 
-    const session = sessionStore[sessionId];
-    const now = moment.tz("America/Mexico_City"); 
-
-    if (email) sessionStore[sessionId].email = email;
-    if (nickname) sessionStore[sessionId].nickname = nickname;
-    session.lastAccessed = now.format('DD-MM-YYYY HH:mm:ss');  // Asegúrate de actualizar lastAccessed con el formato correcto
-    session.isActive = true;
     
-    // Verificamos si las fechas son válidas
-    const createdAtMoment = moment(session.createdAt, 'DD-MM-YYYY HH:mm:ss');
-    const lastAccessedMoment = moment(session.lastAccessed, 'DD-MM-YYYY HH:mm:ss');
+    Sesion.findOne({ sessionID: sessionId })
+        .then(session => {
+            if (!session) {
+                return res.status(404).json({ message: "No existe una sesión activa en la base de datos" });
+            }
 
-    if (!createdAtMoment.isValid() || !lastAccessedMoment.isValid()) {
-        console.error(`Fechas no válidas: createdAt ${session.createdAt}, lastAccessed ${session.lastAccessed}`);
-        return res.status(500).json({ message: "Error: Fechas no válidas." });
-    }
+            const now = moment.tz("America/Mexico_City");  // Obtener la fecha actual en la zona horaria de México
 
-    // Tiempo de conexión (diferencia entre createdAt y la hora actual)
-    const connectionTime = now.diff(createdAtMoment, 'seconds');
+            // Actualizar los campos si es necesario
+            if (email) session.email = email;
+            if (nickname) session.nickname = nickname;
+            session.lastAcces = now.toDate();  // Guardar la fecha actual como objeto Date en UTC
 
-    // Tiempo de inactividad (diferencia entre lastAccessed y la hora actual)
-    const inactivityTime = now.diff(lastAccessedMoment, 'seconds');
-    res.status(200).json({
-        message: "Sesión ha sido actualizada",
-        session: {
-            ...session,
-            connectionTime: `${connectionTime} seconds`, // Tiempo de conexión
-            inactivityTime: `${inactivityTime} seconds`  // Tiempo de inactividad
-        }
-    });
+            // Validar si las fechas de creación y último acceso son válidas
+            const createdAtMoment = moment(session.createdAt);  
+            const lastAccessedMoment = moment(session.lastAcces);
+
+            if (!createdAtMoment.isValid() || !lastAccessedMoment.isValid()) {
+                console.error(`Fechas no válidas: createdAt ${session.createdAt}, lastAcces ${session.lastAcces}`);
+                return res.status(500).json({ message: "Error: Fechas no válidas." });
+            }
+
+            // Calcula la diferencia en segundos para la inactividad
+            const inactivityTimeInSeconds = now.diff(lastAccessedMoment, 'seconds'); // Diferencia en segundos
+
+            // Convertir el tiempo de inactividad a horas, minutos y segundos
+            const inactivityHours = Math.floor(inactivityTimeInSeconds / 3600); // horas
+            const inactivityMinutes = Math.floor((inactivityTimeInSeconds % 3600) / 60); // minutos
+            const inactivitySeconds = inactivityTimeInSeconds % 60; // segundos
+
+            const inactivityTime = {
+                hours: inactivityHours,
+                minutes: inactivityMinutes,
+                seconds: inactivitySeconds
+            };
+
+            // Calcular la diferencia en segundos para la conexión
+            const connectionTimeInSeconds = now.diff(createdAtMoment, 'seconds');  // Diferencia en segundos
+
+            // Convertir el tiempo de conexión a horas, minutos y segundos
+            const connectionHours = Math.floor(connectionTimeInSeconds / 3600); // horas
+            const connectionMinutes = Math.floor((connectionTimeInSeconds % 3600) / 60); // minutos
+            const connectionSeconds = connectionTimeInSeconds % 60; // segundos
+
+            const connectionTime = {
+                hours: connectionHours,
+                minutes: connectionMinutes,
+                seconds: connectionSeconds
+            };
+
+            // Guardar la sesión actualizada en la base de datos
+            session.save()
+                .then(updatedSession => {
+                    res.status(200).json({
+                        message: "Sesión ha sido actualizada",
+                        session: {
+                            ...updatedSession._doc, 
+                            inactivityTime,  // Tiempo de inactividad (horas, minutos, segundos)
+                            connectionTime   // Tiempo de conexión (horas, minutos, segundos)
+                        }
+                    });
+                })
+                .catch(error => {
+                    console.error("Error al guardar la sesión:", error);
+                    res.status(500).json({ message: "Hubo un error al guardar la sesión" });
+                });
+        })
+        .catch(error => {
+            console.error("Error al buscar la sesión:", error);
+            res.status(500).json({ message: "Hubo un error al buscar la sesión en la base de datos" });
+        });
 });
+
+
+
 
 //? Endpoint para verificar el estado de la sesión
 app.get("/status", (req, res) => {
     const { sessionId } = req.query;
 
-    if (!sessionId || !sessionStore[sessionId]) {
-        return res.status(404).json({ message: "No existe una sesión activa" });
+    if (!sessionId) {
+        return res.status(400).json({ message: "sessionId es obligatorio." });
     }
 
-    const session = sessionStore[sessionId];
+    // Buscar la sesión en la base de datos usando el sessionId
+    Sesion.findOne({ sessionID: sessionId })
+        .then(session => {
+            if (!session) {
+                return res.status(404).json({ message: "No existe una sesión activa con ese sessionId" });
+            }
+
+            const now = moment.tz("America/Mexico_City");
+
+            const createdAtMoment = moment(session.createdAt);
+            const lastAccessedMoment = moment(session.lastAcces);
+
+            if (!createdAtMoment.isValid() || !lastAccessedMoment.isValid()) {
+                console.error(`Fechas no válidas: createdAt ${session.createdAt}, lastAcces ${session.lastAcces}`);
+                return res.status(500).json({ message: "Error: Fechas no válidas." });
+            }
+
+            // Tiempo de conexión (diferencia entre createdAt y la hora actual)
+            const connectionTimeInSeconds = now.diff(createdAtMoment, 'seconds');  
+
+            // Tiempo de inactividad (diferencia entre lastAccessed y la hora actual)
+            const inactivityTimeInSeconds = now.diff(lastAccessedMoment, 'seconds');  
+
+            // Convercíon del tiempo de conexión a horas, minutos y segundos
+            const connectionHours = Math.floor(connectionTimeInSeconds / 3600);
+            const connectionMinutes = Math.floor((connectionTimeInSeconds % 3600) / 60);
+            const connectionSeconds = connectionTimeInSeconds % 60;
+
+            // Converción del tiempo de inactividad a horas, minutos y segundos
+            const inactivityHours = Math.floor(inactivityTimeInSeconds / 3600);
+            const inactivityMinutes = Math.floor((inactivityTimeInSeconds % 3600) / 60);
+            const inactivitySeconds = inactivityTimeInSeconds % 60;
+
+            // Estructura para los tiempos de conexión e inactividad
+            const connectionTime = {
+                hours: connectionHours,
+                minutes: connectionMinutes,
+                seconds: connectionSeconds
+            };
+
+            const inactivityTime = {
+                hours: inactivityHours,
+                minutes: inactivityMinutes,
+                seconds: inactivitySeconds
+            };
+
+            
+            res.status(200).json({
+                message: "Sesión activa",
+                session: {
+                    ...session._doc,  
+                    connectionTime, 
+                    inactivityTime  
+                }
+            });
+        })
+        .catch(error => {
+            console.error("Error al buscar la sesión:", error);
+            res.status(500).json({ message: "Hubo un error al buscar la sesión en la base de datos" });
+        });
+});
+
+
+
+app.get("/allCurrentSessions", (req, res) => {
+   
+    Sesion.find({ status: "Activa" })
+        .then(activeSessions => {
+            const now = moment.tz("America/Mexico_City");
+
+            
+            const sessionsWithTimes = activeSessions.map(session => {
+                const createdAtMoment = moment(session.createdAt);
+                const lastAccessedMoment = moment(session.lastAcces);
+
+                // Calcular el tiempo de conexión en segundos
+                const connectionTimeInSeconds = now.diff(createdAtMoment, 'seconds');
+                const inactivityTimeInSeconds = now.diff(lastAccessedMoment, 'seconds');
+
+                // Convertir el tiempo de conexión a horas, minutos y segundos
+                const connectionHours = Math.floor(connectionTimeInSeconds / 3600); // horas
+                const connectionMinutes = Math.floor((connectionTimeInSeconds % 3600) / 60); // minutos
+                const connectionSeconds = connectionTimeInSeconds % 60; // segundos
+
+                const connectionTime = {
+                    hours: connectionHours,
+                    minutes: connectionMinutes,
+                    seconds: connectionSeconds
+                };
+
+                // Convertir el tiempo de inactividad a horas, minutos y segundos
+                const inactivityHours = Math.floor(inactivityTimeInSeconds / 3600); // horas
+                const inactivityMinutes = Math.floor((inactivityTimeInSeconds % 3600) / 60); // minutos
+                const inactivitySeconds = inactivityTimeInSeconds % 60; // segundos
+
+                const inactivityTime = {
+                    hours: inactivityHours,
+                    minutes: inactivityMinutes,
+                    seconds: inactivitySeconds
+                };
+
+                return {
+                    ...session.toObject(),
+                    connectionTime, // Tiempo de conexión (horas, minutos, segundos)
+                    inactivityTime  // Tiempo de inactividad (horas, minutos, segundos)
+                };
+            });
+
+            res.status(200).json({
+                message: "Sesiones activas",
+                activeSessions: sessionsWithTimes
+            });
+        })
+        .catch(error => {
+            console.error("Error al obtener las sesiones activas:", error);
+            res.status(500).json({ message: "Hubo un error al recuperar las sesiones activas." });
+        });
+});
+
+
+
+//Endpoint para el registro de todas las sesiones
+app.get("/allSessions", (req, res) => {
     const now = moment.tz("America/Mexico_City");
 
-    const createdAtMoment = moment(session.createdAt, 'DD-MM-YYYY HH:mm:ss');
-    const lastAccessedMoment = moment(session.lastAccessed, 'DD-MM-YYYY HH:mm:ss');
+    // Buscar todas las sesiones en la base de datos
+    Sesion.find()
+        .then(sessions => {
+            const sessionsWithTimes = sessions.map(session => {
+                const createdAtMoment = moment(session.createdAt);
+                const lastAccessedMoment = moment(session.lastAcces);
 
-    // Validación de las fechas
-    if (!createdAtMoment.isValid() || !lastAccessedMoment.isValid()) {
-        console.error(`Fechas no válidas: createdAt ${session.createdAt}, lastAccessed ${session.lastAccessed}`);
-        return res.status(500).json({ message: "Error: Fechas no válidas." });
-    }
+                // Calculamos el tiempo de conexión en segundos
+                const connectionTimeInSeconds = now.diff(createdAtMoment, 'seconds');
+                const inactivityTimeInSeconds = now.diff(lastAccessedMoment, 'seconds');
 
-    // Tiempo de conexión (diferencia entre createdAt y la hora actual)
-    const connectionTime = now.diff(createdAtMoment, 'seconds');
+                // Converción del tiempo de conexión a horas, minutos y segundos
+                const connectionHours = Math.floor(connectionTimeInSeconds / 3600); // horas
+                const connectionMinutes = Math.floor((connectionTimeInSeconds % 3600) / 60); // minutos
+                const connectionSeconds = connectionTimeInSeconds % 60; // segundos
 
-    // Tiempo de inactividad (diferencia entre lastAccessed y la hora actual)
-    const inactivityTime = now.diff(lastAccessedMoment, 'seconds');
+                const connectionTime = {
+                    hours: connectionHours,
+                    minutes: connectionMinutes,
+                    seconds: connectionSeconds
+                };
 
-    res.status(200).json({
-        message: "Sesión activa",
-        session: {
-            ...session,
-            connectionTime: `${connectionTime} seconds`, // Tiempo de conexión
-            inactivityTime: `${inactivityTime} seconds`  // Tiempo de inactividad
-        }
-    });
+                // Converción del tiempo de inactividad a horas, minutos y segundos
+                const inactivityHours = Math.floor(inactivityTimeInSeconds / 3600); // horas
+                const inactivityMinutes = Math.floor((inactivityTimeInSeconds % 3600) / 60); // minutos
+                const inactivitySeconds = inactivityTimeInSeconds % 60; // segundos
+
+                const inactivityTime = {
+                    hours: inactivityHours,
+                    minutes: inactivityMinutes,
+                    seconds: inactivitySeconds
+                };
+
+                return {
+                    ...session.toObject(),
+                    connectionTime, // Tiempo de conexión (horas, minutos, segundos)
+                    inactivityTime, // Tiempo de inactividad (horas, minutos, segundos)
+                };
+            });
+
+            res.status(200).json({
+                message: "Registro de todas las sesiones",
+                sessions: sessionsWithTimes
+            });
+        })
+        .catch(error => {
+            console.error("Error al obtener las sesiones:", error);
+            res.status(500).json({ message: "Hubo un error al recuperar las sesiones." });
+        });
 });
 
 
-app.get("/sessions", (req, res) => {
-    res.status(200).json({
-        message: "Sesiones activas",
-        activeSessions: Object.values(sessionStore)
-    });
+
+
+app.delete("/deleteAllSessions", (req, res) => {
+    
+    // Utilizamos el método deleteMany() para eliminar todas las sesiones
+    Sesion.deleteMany({})
+        .then(result => {
+            res.status(200).json({
+                message: "Todas las sesiones han sido eliminadas exitosamente.",
+                deletedCount: result.deletedCount  // Número de documentos eliminados
+            });
+        })
+        .catch(error => {
+            console.error("Error al eliminar las sesiones:", error);
+            res.status(500).json({ message: "Hubo un error al eliminar las sesiones." });
+        });
 });
-
-// Nuevo endpoint para el registro de todas las sesiones
-app.get("/session-log", (req, res) => {
-    const now = moment.tz("America/Mexico_City");
-
-    const sessionsWithTimes = Object.values(sessionStore).map(session => {
-        const createdAtMoment = moment(session.createdAt, 'DD-MM-YYYY HH:mm:ss');
-        const lastAccessedMoment = moment(session.lastAccessed, 'DD-MM-YYYY HH:mm:ss');
-
-        // Calculamos el tiempo de conexión e inactividad
-        const connectionTime = now.diff(createdAtMoment, 'seconds');
-        const inactivityTime = now.diff(lastAccessedMoment, 'seconds');
-
-        return {
-            ...session,
-            connectionTime: `${connectionTime} seconds`, // Tiempo de conexión
-            inactivityTime: `${inactivityTime} seconds`  // Tiempo de inactividad
-        };
-    });
-
-    res.status(200).json({
-        message: "Registro de todas las sesiones",
-        sessions: sessionsWithTimes
-    });
-});
-
 
 
 // Inicializamos el servicio
