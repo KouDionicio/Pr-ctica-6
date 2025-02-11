@@ -15,7 +15,7 @@ app.use(express.json());  // Asegúrate de usar este middleware
 app.use(express.urlencoded({ extended: true }));
 app.use(cors());
 
-// Configuración del middleware de sesión
+//? Configuración del middleware de sesión
 app.use(session({
     secret: "p04-CPD#seiyakoulovers-SesionesPersistentes",
     resave: false,
@@ -36,7 +36,7 @@ app.use(session({
 // Función para obtener la IP del cliente
 const getClienteIP =(req)=> req.ip.replace(/^.*:/, '');
 
-// Endpoint para mensaje de bienvenida
+//? Endpoint para mensaje de bienvenida
 app.get("/", (req, res) => {
     return res.status(200).json({
         message: "Bienvenida al API de Control de Sesiones",
@@ -62,7 +62,7 @@ const sessionStore = {};
 // Configuración del intervalo de inactividad (2 minutos = 120,000 ms)
 const SESSION_TIMEOUT = 2 * 60 * 1000; // 2 minutos en milisegundos
 
-// Función para eliminar sesiones inactivas
+//? Función para eliminar sesiones inactivas
 const cleanupInactiveSessions = () => {
     const now = moment.tz("America/Mexico_City"); 
     for (const sessionId in sessionStore) {
@@ -87,7 +87,7 @@ const cleanupInactiveSessions = () => {
 // Intervalo para limpiar sesiones inactivas
 setInterval(cleanupInactiveSessions, 60 * 1000); // Revisa cada minuto
 
-// Login Endpoint
+//? Login Endpoint
 app.post("/login", (req, res) => {
     console.log("Datos recibidos:", req.body);
     const { email, nickname, macAddress } = req.body;
@@ -143,7 +143,7 @@ app.post("/login", (req, res) => {
 });
 
 
-// Logout Endpoint
+//? Logout Endpoint
 app.post("/logout", (req, res) => {
     const { sessionId } = req.body;
 
@@ -178,7 +178,7 @@ app.post("/logout", (req, res) => {
 });
 
 
-
+//? Endpoint de Update
 app.put("/update", (req, res) => {
     const { sessionId, email, nickname } = req.body;
 
@@ -212,7 +212,7 @@ app.put("/update", (req, res) => {
             // Calcula la diferencia en segundos para la inactividad
             const inactivityTimeInSeconds = now.diff(lastAccessedMoment, 'seconds'); // Diferencia en segundos
 
-            // Convertir el tiempo de inactividad a horas, minutos y segundos
+            // Converción el tiempo de inactividad a horas, minutos y segundos
             const inactivityHours = Math.floor(inactivityTimeInSeconds / 3600); // horas
             const inactivityMinutes = Math.floor((inactivityTimeInSeconds % 3600) / 60); // minutos
             const inactivitySeconds = inactivityTimeInSeconds % 60; // segundos
@@ -226,7 +226,7 @@ app.put("/update", (req, res) => {
             // Calcular la diferencia en segundos para la conexión
             const connectionTimeInSeconds = now.diff(createdAtMoment, 'seconds');  // Diferencia en segundos
 
-            // Convertir el tiempo de conexión a horas, minutos y segundos
+            // Converción el tiempo de conexión a horas, minutos y segundos
             const connectionHours = Math.floor(connectionTimeInSeconds / 3600); // horas
             const connectionMinutes = Math.floor((connectionTimeInSeconds % 3600) / 60); // minutos
             const connectionSeconds = connectionTimeInSeconds % 60; // segundos
@@ -334,7 +334,7 @@ app.get("/status", (req, res) => {
 });
 
 
-
+//? Endpoint de sesiones solamente activas
 app.get("/allCurrentSessions", (req, res) => {
    
     Sesion.find({ status: "Activa" })
@@ -350,7 +350,7 @@ app.get("/allCurrentSessions", (req, res) => {
                 const connectionTimeInSeconds = now.diff(createdAtMoment, 'seconds');
                 const inactivityTimeInSeconds = now.diff(lastAccessedMoment, 'seconds');
 
-                // Convertir el tiempo de conexión a horas, minutos y segundos
+                // Convertimos el tiempo de conexión a horas, minutos y segundos
                 const connectionHours = Math.floor(connectionTimeInSeconds / 3600); // horas
                 const connectionMinutes = Math.floor((connectionTimeInSeconds % 3600) / 60); // minutos
                 const connectionSeconds = connectionTimeInSeconds % 60; // segundos
@@ -361,7 +361,7 @@ app.get("/allCurrentSessions", (req, res) => {
                     seconds: connectionSeconds
                 };
 
-                // Convertir el tiempo de inactividad a horas, minutos y segundos
+                // Convertimos el tiempo de inactividad a horas, minutos y segundos
                 const inactivityHours = Math.floor(inactivityTimeInSeconds / 3600); // horas
                 const inactivityMinutes = Math.floor((inactivityTimeInSeconds % 3600) / 60); // minutos
                 const inactivitySeconds = inactivityTimeInSeconds % 60; // segundos
@@ -392,7 +392,7 @@ app.get("/allCurrentSessions", (req, res) => {
 
 
 
-//Endpoint para el registro de todas las sesiones
+//? Endpoint para la vista de todas las sesiones
 app.get("/allSessions", (req, res) => {
     const now = moment.tz("America/Mexico_City");
 
@@ -449,7 +449,7 @@ app.get("/allSessions", (req, res) => {
 
 
 
-
+//? Endpoint para eliminar los registros de la BD
 app.delete("/deleteAllSessions", (req, res) => {
     
     // Utilizamos el método deleteMany() para eliminar todas las sesiones
