@@ -1,0 +1,24 @@
+{
+  "name": "practica-06-230237sesioneshttp",
+  "version": "1.0.0",
+  "description": "Realizar un ejemplo de aplicación web basada en el TechStack de NodeJS, Express que permita controlar las Sesiones.",
+  "main": "index.js",
+  "type": "module",
+  "scripts": {
+    "dev": "nodemon app.js"
+  },
+  "author": "Citlalli Pérez Dionicio",
+  "license": "ISC",
+  "dependencies": {
+    "body-parser": "^1.20.3",
+    "connect-mongo": "^5.1.0",
+    "cors": "^2.8.5",
+    "express": "^4.21.2",
+    "express-session": "^1.18.1",
+    "moment-timezone": "^0.5.47",
+    "mongoose": "^8.10.0",
+    "node-js": "^1.0.0",
+    "nodemon": "^3.1.9",
+    "uuid": "^11.0.5"
+  }
+}
